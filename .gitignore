@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Secrets — never commit keys. Use env vars or a local .env kept out of git.
+.env
+*.pem
+
+# OS / editor noise
+.DS_Store

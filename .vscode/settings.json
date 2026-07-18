@@ -1,0 +1,4 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/phase1/.venv/bin/python",
+  "python.venvFolders": ["phase1"]
+}
