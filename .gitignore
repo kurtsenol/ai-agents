@@ -9,3 +9,4 @@ __pycache__/
 
 # OS / editor noise
 .DS_Store
+*.db
