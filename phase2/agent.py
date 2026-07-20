@@ -45,14 +45,12 @@ SYSTEM = f""" You are an expert data analyst investigating a retail SQLite datab
         """
 
 
-def run_agent(question: str) -> str:
+def run_turn(messages: list) -> str:
     """
     Run a Claude agent with the given question and tools.
     """
 
     MAX_ITERATIONS = 15
-
-    messages = [{"role": "user", "content": question}]
 
     iteration = 0 
     while iteration < MAX_ITERATIONS:
@@ -64,6 +62,9 @@ def run_agent(question: str) -> str:
         response = client.messages.create(
             model=MODEL, max_tokens=4096, tools=TOOLS, system=SYSTEM, messages=messages,
         )
+
+        print(f"input tokens: {response.usage.input_tokens}")
+        print(f"output tokens: {response.usage.output_tokens}")
 
         messages.append({"role": "assistant", "content": response.content})
 
@@ -98,7 +99,7 @@ def run_agent(question: str) -> str:
             break
 
     print(f"the loop exhausts {MAX_ITERATIONS} iterations.")
-    
+
     final_message = { "type": "text", "text": "you're out of query budget; report your findings so far."}
     
     messages[-1]["content"].append(final_message)
@@ -111,9 +112,23 @@ def run_agent(question: str) -> str:
         if block.type == "text":
             return block.text
 
+def chat():
+
+    messages = []
+
+    while True:
+        question = input("Enter a question (or 'quit' to exit): ")
+        if question.lower() == "quit":
+            break
+
+        messages.append({"role": "user", "content": question})
+
+        response = run_turn(messages)
+
+        print("claude>", response)
+
+        messages.append({"role": "assistant", "content": response})
+
 if __name__ == "__main__":
-    question = """
-    Anything unusual in store 42's transactions yesterday?
-    """
     
-    print(run_agent(question))
+    chat()
