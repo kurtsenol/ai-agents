@@ -3,7 +3,7 @@ import os
 
 import anthropic
 
-from tools import TOOLS, run_sql
+from tools import TOOLS, run_sql, search_reviews, DISPATCH
 
 client = anthropic.Anthropic(
     api_key=os.environ["LITELLM_API_KEY"],
@@ -74,19 +74,22 @@ def run_turn(messages: list) -> str:
             for block in response.content:
                 if block.type == "tool_use":
                     
-                    if block.name == "run_sql":
-                        
-                        print(f"→ run_sql: {block.input['query']}")
-                        
-                        output = run_sql(block.input['query'])
+                    try:    
+
+                        func = DISPATCH[block.name]
+                        print(f"→ {block.name}: {block.input}")
+                        output = func(**block.input)
+
+                    except Exception as e:
+                        output = f"Error executing tool {block.name}: {str(e)}"
                     
-                        tool_results.append(
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": block.id,  # must match the request
-                                "content": output,
-                            }
-                        )
+                    tool_results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": block.id,  # must match the request
+                            "content": output,
+                        }
+                    )
 
             messages.append({"role": "user", "content": tool_results})
 
