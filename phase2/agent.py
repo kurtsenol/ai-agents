@@ -101,19 +101,25 @@ def run_turn(messages: list) -> str:
 
             break
 
-    print(f"the loop exhausts {MAX_ITERATIONS} iterations.")
+    else:
+        # while...else runs ONLY on natural exhaustion (condition went false),
+        # NOT on break. So we reach here only after MAX_ITERATIONS full loops,
+        # where messages[-1] is guaranteed to be the user tool_results message —
+        # safe to append the budget plea to. The break path skips this entirely.
+        print(f"the loop exhausts {MAX_ITERATIONS} iterations.")
 
-    final_message = { "type": "text", "text": "you're out of query budget; report your findings so far."}
-    
-    messages[-1]["content"].append(final_message)
+        final_message = {"type": "text", "text": "you're out of query budget; report your findings so far."}
+        messages[-1]["content"].append(final_message)
 
-    response = client.messages.create(
+        response = client.messages.create(
             model=MODEL, max_tokens=4096, tools=TOOLS, tool_choice={"type": "none"}, system=SYSTEM, messages=messages,
         )
-    
-    for block in response.content:
-        if block.type == "text":
-            return block.text
+
+        for block in response.content:
+            if block.type == "text":
+                return block.text
+
+    return "No answer produced."
 
 def chat():
 
