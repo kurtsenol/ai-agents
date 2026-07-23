@@ -3,6 +3,9 @@ from elasticsearch.helpers import bulk
 from pathlib import Path
 
 
+from embeddings import embed
+
+
 from loader import load_corpus
 from chunking import build_chunks
 
@@ -18,6 +21,12 @@ MAPPING = {
     "doc_type":          {"type": "keyword"},
     "effective_date":    {"type": "date"},
     "applies_to_stores": {"type": "keyword"},
+    "embedding": {
+        "type": "dense_vector",
+        "dims": 384,
+        "index": True,
+        "similarity": "cosine",
+    },
 }
 
 
@@ -56,6 +65,11 @@ if __name__ == "__main__":
 
     corpus = load_corpus(corpus_dir)
     chunks = build_chunks(corpus)
+
+    texts = [c["text"] for c in chunks]
+    vectors = embed(texts)                 # 17 tane 384-boyutlu numpy vektör
+    for chunk, vector in zip(chunks, vectors):
+        chunk["embedding"] = vector.tolist()
 
     create_index(es)
     index_chunks(es, chunks)
