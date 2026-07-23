@@ -9,4 +9,5 @@ dependencies = [
     "elasticsearch==8.15.1",
     "elasticsearch-dsl==8.15",
     "pydantic>=2.10.6",
+    "pyyaml>=6.0.3",
 ]
