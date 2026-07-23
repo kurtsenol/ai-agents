@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 import re
+from datetime import date
 
 import yaml
 
@@ -57,6 +58,9 @@ def load_corpus(corpus_dir) -> dict:
             raise ValueError(
                 f"{path.name}: frontmatter must be a YAML mapping"
             )
+
+        if isinstance(metadata.get("effective_date"), date):
+            metadata["effective_date"] = metadata["effective_date"].isoformat()
 
         doc_id = metadata.get("doc_id")
 
