@@ -1,7 +1,7 @@
 from elasticsearch import Elasticsearch
 from pathlib import Path
 
-from retrieve import retrieve
+from retrieve import retrieve, retrieve_hybrid, retrieve_rerank, retrieve_vector
 from loader import load_golden
 
 
@@ -22,7 +22,7 @@ def required_ids(question):
     }
 
 
-def evaluate(es, golden, k):
+def evaluate(es, golden, k, retrieve_fn):
     results = []
     unanswerable_count = 0
 
@@ -35,7 +35,7 @@ def evaluate(es, golden, k):
 
         required = required_ids(question)
 
-        retrieved = retrieve(
+        retrieved = retrieve_fn(
             es,
             question["question"],
             k=k,
@@ -73,36 +73,132 @@ def evaluate(es, golden, k):
         "unanswerable_count": unanswerable_count,
     }
 
+def missed_ids(es, golden, k, retrieve_fn):
+    out = set()
+
+    for question in golden:
+
+        if not question.get("sources"):
+            continue
+
+        required = {
+            f"{s['doc']}#{s['section']}"
+            for s in question["sources"]
+        }
+
+        retrieved = retrieve_fn(
+            es,
+            question["question"],
+            k=k,
+        )
+
+        got = {
+            f"{r['doc_id']}#{r['section']}"
+            for r in retrieved
+        }
+
+        if required - got:
+            out.add(question["id"])
+
+    return out
+
 if __name__ == "__main__":
     es = Elasticsearch("http://localhost:9200")
+
     base_dir = Path(__file__).parent
     golden_path = base_dir / "golden" / "golden_set.jsonl"
     golden = load_golden(golden_path)
 
-    for k in (1, 3, 5):
-        evaluation = evaluate(es, golden, k)
+    retrievers = [
+        ("BM25", retrieve),
+        ("Vector", retrieve_vector),
+        ("Hybrid", retrieve_hybrid),
+        ("Rerank", retrieve_rerank),
+    ]
 
-        print(f"\nRecall@{k}: {evaluation['mean_recall']:.3f}")
+    # -------------------------
+    # Evaluate each retriever
+    # -------------------------
+    for name, retrieve_fn in retrievers:
+        print(f"\n========== {name} ==========")
 
-        print(
-            f"Unanswerable skipped: "
-            f"{evaluation['unanswerable_count']}"
+        for k in (1, 3, 5):
+            evaluation = evaluate(
+                es,
+                golden,
+                k,
+                retrieve_fn,
+            )
+
+            print(f"\nRecall@{k}: {evaluation['mean_recall']:.3f}")
+            print(
+                f"Unanswerable skipped: "
+                f"{evaluation['unanswerable_count']}"
+            )
+
+            missed = [
+                result
+                for result in evaluation["results"]
+                if result["recall"] < 1
+            ]
+
+            if missed:
+                print("Questions with missed sources:")
+
+                for result in missed:
+                    print(
+                        f"  {result['id']} | "
+                        f"recall={result['recall']:.3f} | "
+                        f"missed={result['missed_ids']}"
+                    )
+            else:
+                print("No questions with missed sources.")
+
+    # -------------------------
+    # Compare retrievers
+    # -------------------------
+
+    def print_diff(name_a, fn_a, name_b, fn_b, k):
+        miss_a = missed_ids(
+            es,
+            golden,
+            k,
+            fn_a,
         )
 
-        missed = [
-            result
-            for result in evaluation["results"]
-            if result["recall"] < 1
-        ]
+        miss_b = missed_ids(
+            es,
+            golden,
+            k,
+            fn_b,
+        )
 
-        if missed:
-            print("Questions with missed sources:")
+        fixed = miss_a - miss_b
+        regressed = miss_b - miss_a
 
-            for result in missed:
-                print(
-                    f"  {result['id']} | "
-                    f"recall={result['recall']:.3f} | "
-                    f"missed={result['missed_ids']}"
-                )
-        else:
-            print("No questions with missed sources.")
+        print(
+            f"\n=== {name_a} → {name_b} "
+            f"(Recall@{k}) ==="
+        )
+
+        print(f"{name_a} missed: {sorted(miss_a)}")
+        print(f"{name_b} missed: {sorted(miss_b)}")
+        print(f"Fixed:      {sorted(fixed)}")
+        print(f"Regressed:  {sorted(regressed)}")
+
+    for k in (1, 5):
+        print_diff(
+            "Hybrid",
+            retrieve_hybrid,
+            "Rerank",
+            retrieve_rerank,
+            k,
+        )
+
+        # print_diff(
+        #     "Vector",
+        #     retrieve_vector,
+        #     "Hybrid",
+        #     retrieve_hybrid,
+        #     k,
+        # )

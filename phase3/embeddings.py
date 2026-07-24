@@ -9,6 +9,10 @@ def embed(texts: list[str]) -> list:
     """Embed passages/documents. Returns a list of 384-dimensional vectors."""
     return list(_model.embed(texts))
 
+def embed_query(text: str):
+    """Embed a search query (BGE adds a retrieval instruction prefix)."""
+    return list(_model.query_embed([text]))[0]
+
 
 def cosine(a, b):
     return float(
