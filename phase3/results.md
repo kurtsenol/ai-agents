@@ -1,4 +1,4 @@
-# Retrieval Eval — recall@k (44 answerable questions)
+# Retrieval Eval — recall@k (45 answerable questions)
 
 | retriever                | recall@1 | recall@3 | recall@5 | notes |
 |--------------------------|----------|----------|----------|-------|

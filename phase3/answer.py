@@ -39,17 +39,29 @@ def answer(es, question, store_id=None, k=5):
     text = "".join(b.text for b in resp.content if b.type == "text")
     return text, [c["chunk_id"] for c in chunks]
 
+def chat():
+    es = Elasticsearch("http://localhost:9200")
+    while True:
+        q = input("\nQuestion (or 'quit'): ").strip()
+        if q.lower() == "quit":
+            break
+        store = input("Store ID (blank = general): ").strip()
+        store_id = int(store) if store else None
+        text, sources = answer(es, q, store_id=store_id)
+        print(f"\n{text}\n(retrieved: {sources})")
 
 if __name__ == "__main__":
-    es = Elasticsearch("http://localhost:9200")
+    # es = Elasticsearch("http://localhost:9200")
+    
+    # questions = [("How many days do customers have to return most products?", None),
+    #              ("Can I return a clearance item at Store #42?", 42),
+    #              ("What is Store #42's phone number?", 42)]
 
-    questions = [("How many days do customers have to return most products?", None),
-                 ("Can I return a clearance item at Store #42?", 42),
-                 ("What is Store #42's phone number?", 42)]
+    # for question, store_id in questions:
+    #     answer_text, sources = answer(es, question, store_id=store_id)
+    #     print(f"\nQuestion: {question}")
+    #     print(f"Store ID: {store_id}")
+    #     print(f"Answer: {answer_text}")
+    #     print(f"Sources: {sources}")
 
-    for question, store_id in questions:
-        answer_text, sources = answer(es, question, store_id=store_id)
-        print(f"\nQuestion: {question}")
-        print(f"Store ID: {store_id}")
-        print(f"Answer: {answer_text}")
-        print(f"Sources: {sources}")
+    chat()
