@@ -27,6 +27,7 @@ MAPPING = {
         "index": True,
         "similarity": "cosine",
     },
+    "store_id": {"type": "integer"},
 }
 
 

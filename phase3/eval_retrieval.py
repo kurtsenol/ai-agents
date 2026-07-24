@@ -39,6 +39,7 @@ def evaluate(es, golden, k, retrieve_fn):
             es,
             question["question"],
             k=k,
+            store_id=question.get("store_id")
         )
 
         retrieved_ids = {
@@ -90,6 +91,7 @@ def missed_ids(es, golden, k, retrieve_fn):
             es,
             question["question"],
             k=k,
+            store_id=question.get("store_id")
         )
 
         got = {

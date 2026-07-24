@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 from loader import load_corpus
 
@@ -44,6 +45,8 @@ def build_chunks(corpus) -> list[dict]:
         for section_id, section in sections.items():
             text = section["text"].strip()
 
+            STORE_IN_TITLE = re.compile(r"Store #(\d+)", re.IGNORECASE)
+            m = STORE_IN_TITLE.search(section["title"])
             # Skip empty sections.
             if not text:
                 continue
@@ -57,6 +60,7 @@ def build_chunks(corpus) -> list[dict]:
                 "doc_type": metadata["doc_type"],
                 "effective_date": metadata["effective_date"],
                 "applies_to_stores": metadata["applies_to_stores"],
+                "store_id": m.group(1) if m else None
             }
 
             chunks.append(chunk)
