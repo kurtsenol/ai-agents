@@ -4,7 +4,6 @@ import anthropic
 
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.providers.anthropic import AnthropicProvider
-from pydantic_ai.profiles.anthropic import anthropic_model_profile
 
 
 from pydantic_ai import Agent
@@ -25,14 +24,11 @@ provider = AnthropicProvider(
 )
 
 
-profile = anthropic_model_profile(model_name="claude-sonnet-4-6")
-
 model = AnthropicModel(
     provider=provider,
     model_name=MODEL
     ) 
 
-print(model.profile)
 
 agent = Agent(model=model)
 
