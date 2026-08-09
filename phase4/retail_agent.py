@@ -8,7 +8,7 @@ from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search, Q
 
 from model import build_model 
-from pydantic_ai import Agent, RunContext   
+from pydantic_ai import Agent, RunContext, ApprovalRequired, DeferredToolRequests
 
 from typing import Annotated
 from pydantic import Field
@@ -243,6 +243,108 @@ def search_reviews(
         output += f"\n...and {total - len(reviews)} more rows."
 
     return output
+
+@agent.tool
+def run_write_sql(
+        ctx: RunContext[Deps],
+        query: str
+        ) -> str:
+    """
+    Execute an approved write SQL statement against the SQLite database.
+
+    Use this tool when the user explicitly wants to change database data using
+    INSERT, UPDATE, or DELETE.
+
+    Do NOT use this tool for investigation or reading data. For SELECT queries,
+    including SELECT queries using WITH/CTEs, use run_sql instead.
+
+    This tool requires explicit human approval before executing the write.
+
+    Database schema:
+
+    stores
+    - id INTEGER PRIMARY KEY
+    - name TEXT
+    - city TEXT
+
+    products
+    - id INTEGER PRIMARY KEY
+    - name TEXT
+    - category TEXT
+    - unit_price REAL
+
+    transactions
+    - id INTEGER PRIMARY KEY
+    - store_id INTEGER
+    - product_id INTEGER
+    - quantity INTEGER
+    - unit_price REAL
+    - ts TEXT (ISO 8601 timestamp)
+
+    Args:
+        query: A single SQLite INSERT, UPDATE, or DELETE statement. SELECT and WITH queries are not allowed.
+    """
+
+    query = query.strip().rstrip(";")
+
+    # Remove leading comments before validation
+    cleaned = _strip_leading_comments(query).lstrip()
+
+    match = re.match(
+        r"^(INSERT|UPDATE|DELETE)\b",
+        cleaned,
+        re.IGNORECASE,
+    )
+
+    if not match:
+        return (
+            "Error: run_write_sql only accepts INSERT, UPDATE, or DELETE "
+            "queries. Use run_sql for SELECT/WITH read-only queries."
+        )
+
+    statement_type = match.group(1).upper()
+
+    # # UPDATE and DELETE without WHERE are high-risk operations.
+    # # This intentionally checks the SQL text rather than trying to parse
+    # # the full SQL grammar.
+    is_high_risk = (
+        statement_type in {"UPDATE", "DELETE"}
+        and not re.search(r"\bWHERE\b", cleaned, re.IGNORECASE)
+    )
+
+    if not ctx.tool_call_approved:
+        raise ApprovalRequired(
+            metadata={
+                "risk": "high" if is_high_risk else "normal",
+                "statement_type": statement_type,
+                "reason": (
+                    "no WHERE clause"
+                    if is_high_risk
+                    else "write operation requires approval"
+                ),
+            }
+        )
+
+    conn = sqlite3.connect(ctx.deps.db_path)
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(query)
+        affected_rows = cursor.rowcount
+        conn.commit()
+
+        return (
+            f"Write successful. "
+            f"Statement: {cleaned.split()[0].upper()}. "
+            f"Rows affected: {affected_rows}."
+        )
+
+    except sqlite3.Error as e:
+        conn.rollback()
+        return f"SQLite error: {e}"
+
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":

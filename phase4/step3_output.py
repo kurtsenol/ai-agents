@@ -39,6 +39,14 @@ class Finding(BaseModel):
 
 
 class AnalysisResult(BaseModel):
+
+    """Call this tool when the analysis is complete and you are ready to provide
+    the final answer. Only report findings that are directly supported by the
+    evidence returned by the available tools. If the evidence is insufficient
+    to support any finding, leave findings empty and explain why in
+    insufficient_evidence_reason.
+    """
+    
     summary: str = Field(
         description="A concise human-readable summary of the overall analysis."
     )
