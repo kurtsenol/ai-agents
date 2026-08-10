@@ -12,3 +12,4 @@ __pycache__/
 *.db
 
 debug.log
+formatted_log.txt
