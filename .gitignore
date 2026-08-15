@@ -13,3 +13,4 @@ __pycache__/
 
 debug.log
 formatted_log.txt
+runs.jsonl
