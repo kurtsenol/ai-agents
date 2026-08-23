@@ -7,5 +7,6 @@ requires-python = ">=3.13"
 dependencies = [
     "elasticsearch==8.15.1",
     "elasticsearch-dsl==8.15",
+    "langgraph>=1.2.11",
     "pydantic-ai-slim[anthropic]>=2.24.0",
 ]
