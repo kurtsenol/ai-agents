@@ -35,19 +35,8 @@ class State(TypedDict):
     them side by side at the end is the whole lesson of this step.
     """
 
-    # TODO(1): Give `messages` the reducer that appends instead of replacing.
-    #
-    # `add_messages` is imported above. The syntax is Annotated[<type>, <reducer>]
-    # — the same Annotated you used in step 2 to attach Field(ge=1, le=5) to a
-    # tool parameter. There, the metadata told Pydantic how to validate. Here
-    # it tells LangGraph how to merge.
-    #
-    # A reducer is a function (old_value, update) -> new_value. Without one,
-    # LangGraph does what a dict does: the update wins.
-    messages: ...
-
+    messages: Annotated[list, add_messages]
     log: list[str]
-
     step: int
 
 
@@ -97,18 +86,12 @@ def tools_node(state: State) -> dict:
 # ---------------------------------------------------------------------------
 
 def should_continue(state: State) -> str:
-    # TODO(2): Return the name of the next step.
-    #
-    # Return "tools" when the last message asked for tool calls, and END when
-    # it did not. END is imported above and is a sentinel, not the string
-    # "END" — return the object.
-    #
-    # Note what this function is NOT allowed to do: it cannot change state.
-    # Routing and mutation are separate jobs in LangGraph, which is why the
-    # loop is inspectable at all. A node that also decided where to go next
-    # would hide the control flow again.
-    ...
+    last = state["messages"][-1]
 
+    if last.tool_calls:
+        return "tools"
+
+    return END
 
 # ---------------------------------------------------------------------------
 # Wiring

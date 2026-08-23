@@ -391,6 +391,20 @@ wheels = [
 ]
 
 [[package]]
+name = "langchain-anthropic"
+version = "1.6.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anthropic" },
+    { name = "langchain-core" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/15/a5/207e2495533cbc4383c7b7e18636869765bb7a9308edc29cfe80b51339a8/langchain_anthropic-1.6.1.tar.gz", hash = "sha256:8325abbbb33acac9e401a4cfabeb2584e67d3f60ef739aea4e7ee80f317d6d64", size = 722964, upload-time = "2026-08-20T14:06:33.813Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/23/f2/9750b14b2a707e6c9b85cb62dc36e47c3f279dead3b14bc27515f5be9e65/langchain_anthropic-1.6.1-py3-none-any.whl", hash = "sha256:befb743448b3e4c2fa0d2406ea7d564be118f21464e7984ce7dc1f5b05bad82d", size = 57166, upload-time = "2026-08-20T14:06:32.807Z" },
+]
+
+[[package]]
 name = "langchain-core"
 version = "1.6.0"
 source = { registry = "https://pypi.org/simple" }
@@ -615,6 +629,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "elasticsearch" },
     { name = "elasticsearch-dsl" },
+    { name = "langchain-anthropic" },
     { name = "langgraph" },
     { name = "pydantic-ai-slim", extra = ["anthropic"] },
 ]
@@ -623,6 +638,7 @@ dependencies = [
 requires-dist = [
     { name = "elasticsearch", specifier = "==8.15.1" },
     { name = "elasticsearch-dsl", specifier = "==8.15" },
+    { name = "langchain-anthropic", specifier = ">=1.6.1" },
     { name = "langgraph", specifier = ">=1.2.11" },
     { name = "pydantic-ai-slim", extras = ["anthropic"], specifier = ">=2.24.0" },
 ]
