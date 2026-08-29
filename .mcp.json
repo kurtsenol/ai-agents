@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "retail-sql": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "phase4",
+        "run",
+        "mcp_sql_server.py"
+      ]
+    },
+    "retail-reviews": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "phase4",
+        "run",
+        "mcp_es_server.py"
+      ]
+    }
+  }
+}
