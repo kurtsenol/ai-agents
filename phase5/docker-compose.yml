@@ -1,0 +1,33 @@
+# One container that bundles the whole Grafana observability stack:
+#   - an OpenTelemetry Collector (the OTLP endpoint we export to)
+#   - Tempo      -> stores traces
+#   - Prometheus -> stores metrics
+#   - Loki       -> stores logs
+#   - Grafana    -> the UI that queries all three
+#
+# In production these are five separate deployments. For learning, the
+# all-in-one image keeps the moving parts down to: "is it up or not".
+#
+#   docker compose up -d      # start
+#   docker compose logs -f    # watch it boot (~30s the first time)
+#   docker compose down       # stop
+#
+# Grafana: http://localhost:3000   (anonymous admin, no login)
+
+services:
+  lgtm:
+    image: grafana/otel-lgtm:latest
+    container_name: phase5-lgtm
+    ports:
+      - "3000:3000"   # Grafana UI
+      - "4317:4317"   # OTLP over gRPC
+      - "4318:4318"   # OTLP over HTTP  <- we use this one
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    volumes:
+      - lgtm-data:/data
+
+volumes:
+  lgtm-data:

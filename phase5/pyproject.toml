@@ -1,0 +1,19 @@
+[project]
+name = "phase5"
+version = "0.1.0"
+description = "Observability, security and CI for the retail agent"
+requires-python = ">=3.13"
+dependencies = [
+    # the phase 4 agent we are instrumenting imports these
+    "elasticsearch==8.15.1",
+    "elasticsearch-dsl==8.15",
+    "pydantic-ai-slim[anthropic]>=2.24.0",
+    # OpenTelemetry: the API ships with pydantic-ai, the SDK does not.
+    # The API is the interface code writes against; the SDK is the
+    # implementation that actually records and exports spans.
+    "opentelemetry-sdk>=1.44.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.44.0",
+    "openinference-instrumentation-langchain>=0.1.73",
+    "langgraph>=1.2.11",
+    "langchain-anthropic>=1.6.1",
+]
