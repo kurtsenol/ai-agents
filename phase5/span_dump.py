@@ -16,22 +16,14 @@ from pathlib import Path
 
 from opentelemetry.sdk.trace import ReadableSpan, SpanProcessor
 
-# TODO(1): The attribute keys worth surfacing.
-#
-# A span carries dozens of attributes. Only a handful are the ones a
-# framework-agnostic dashboard would be built on. Fill this list with the
-# OpenTelemetry GenAI convention keys you would need in order to answer:
-#
-#   - which model was called?
-#   - how many input / output tokens did it cost?
-#   - what kind of operation was this span (a model call? a tool call?)
-#   - which tool ran?
-#
-# Run the script once with this list empty: the dump prints EVERY key it saw,
-# so you can read the real names off the output and then come back and choose.
-# The convention is documented at:
-#   https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/
 WATCH_KEYS: list[str] = [
+    "gen_ai.request.model",
+    "gen_ai.usage.input_tokens",
+    "gen_ai.usage.output_tokens",
+    "gen_ai.operation.name",
+    "gen_ai.tool.name",
+    "gen_ai.aggregated_usage.input_tokens",
+    "gen_ai.aggregated_usage.output_tokens"
 ]
 
 

@@ -28,23 +28,19 @@ from span_dump import SpanDump
 QUESTION = "42 numaralı mağazada fiyat anormalliği var mı?"
 OUT_DIR = Path(__file__).parent / "out"
 
-# TODO(2): Both runs land in the same Grafana. How do you tell them apart?
-#
-#   (a) a different `service.name` per framework
-#         -> lives on the Resource, fixed for the whole process
-#   (b) one shared `service.name`, with the framework as a span attribute
-#         -> lives on a single span, set per run
-#
-# These are not interchangeable. Ask yourself which question you want to be
-# able to answer in Grafana: "show me everything the LangGraph service did"
-# or "show me all agent runs, and let me break them down by framework".
-# Pick one, and wire it in below. If you pick (b), set the attribute on the
-# root span in run_pydantic/run_langgraph.
-def service_name(framework: str) -> str:
-    ...
+# Option (b): one logical service, framework recorded per run as a span
+# attribute. The Resource stays identical across both runs, so in Grafana
+# every run lives under one service and `phase5.framework` is the dimension
+# you break it down by.
+SERVICE_NAME = "phase5-agent"
+FRAMEWORK_ATTR = "phase5.framework"
 
 
-def run_pydantic(tracer) -> None:
+def service_name() -> str:
+    return SERVICE_NAME
+
+
+def run_pydantic(tracer, framework: str) -> None:
     from pydantic_ai import Agent
 
     Agent.instrument_all()
@@ -53,13 +49,14 @@ def run_pydantic(tracer) -> None:
 
     with tracer.start_as_current_span("step2.question") as span:
         span.set_attribute("phase5.question", QUESTION)
+        span.set_attribute(FRAMEWORK_ATTR, framework)
         result = agent.run_sync(QUESTION, deps=build_deps())
 
     print("=== OUTPUT ===")
     print(str(result.output)[:600])
 
 
-def run_langgraph(tracer, provider) -> None:
+def run_langgraph(tracer, provider, framework: str) -> None:
     from openinference.instrumentation.langchain import LangChainInstrumentor
 
     # LangGraph has no native OTel support. This instrumentor hooks LangChain's
@@ -85,6 +82,7 @@ def run_langgraph(tracer, provider) -> None:
 
     with tracer.start_as_current_span("step2.question") as span:
         span.set_attribute("phase5.question", QUESTION)
+        span.set_attribute(FRAMEWORK_ATTR, framework)
         final = graph.invoke(state)
 
     print("=== OUTPUT ===")
@@ -126,7 +124,7 @@ def main() -> None:
     if framework not in ("pydantic", "langgraph"):
         sys.exit("usage: uv run step2_semconv.py [pydantic|langgraph]")
 
-    provider = setup_tracing(service_name=service_name(framework))
+    provider = setup_tracing(service_name=service_name())
 
     dump = SpanDump()
     provider.add_span_processor(dump)
@@ -134,9 +132,9 @@ def main() -> None:
     tracer = trace.get_tracer("phase5.step2")
 
     if framework == "pydantic":
-        run_pydantic(tracer)
+        run_pydantic(tracer, framework)
     else:
-        run_langgraph(tracer, provider)
+        run_langgraph(tracer, provider, framework)
 
     provider.force_flush()
 
