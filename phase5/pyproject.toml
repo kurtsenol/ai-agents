@@ -7,7 +7,7 @@ dependencies = [
     # the phase 4 agent we are instrumenting imports these
     "elasticsearch==8.15.1",
     "elasticsearch-dsl==8.15",
-    "pydantic-ai-slim[anthropic]>=2.24.0",
+    "pydantic-ai-slim[anthropic,mcp]>=2.24.0",
     # OpenTelemetry: the API ships with pydantic-ai, the SDK does not.
     # The API is the interface code writes against; the SDK is the
     # implementation that actually records and exports spans.

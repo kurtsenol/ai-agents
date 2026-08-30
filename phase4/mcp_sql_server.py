@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
+from mcp.types import CallToolResult, TextContent
 
 import tools_core
 
@@ -45,7 +46,7 @@ server = MCPServer(
 
 
 @server.tool()
-def run_sql(query: str) -> str:
+def run_sql(query: str) -> CallToolResult:
     """Execute a read-only SQL query against the retail database.
 
     Only SELECT and WITH statements are allowed. Results are capped at 50
@@ -69,7 +70,19 @@ def run_sql(query: str) -> str:
     # never sees it and the model never sees it.
     log.info("run_sql rows=%s truncated=%s", meta["row_count"], meta["truncated"])
 
-    return text
+    # --- the second channel -------------------------------------------------
+    # A tool result is read by two audiences. The model reads `content`; a
+    # program (the eval, a dashboard) needs facts like row_count and truncated.
+    # In phase 4 that was ToolReturn(metadata=...), which existed only inside
+    # one Python process. Across MCP the equivalent is the protocol's own
+    # `_meta` field: it travels on the wire, and the model never sees it.
+    #
+    # Returning CallToolResult instead of a bare str changes nothing the model
+    # reads - `content` is the same text as before.
+    return CallToolResult(
+        content=[TextContent(type="text", text=text)],
+        meta=meta,
+    )
 
 
 @server.tool()

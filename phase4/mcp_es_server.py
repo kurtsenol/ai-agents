@@ -29,6 +29,7 @@ from typing import Annotated
 
 from elasticsearch import Elasticsearch
 from mcp.server.mcpserver import Context, MCPServer
+from mcp.types import CallToolResult, TextContent
 from pydantic import Field
 
 import tools_core
@@ -101,7 +102,7 @@ def search_reviews(
             le=5,
         )
     ] = None,
-) -> str:
+) -> CallToolResult:
     """Search customer reviews by free text, or list them when no query is given.
 
     A text search returning nothing does not prove a topic is absent, because
@@ -119,7 +120,19 @@ def search_reviews(
         meta["query_used"], meta["hit_count"], meta["truncated"],
     )
 
-    return text
+    # --- the second channel -------------------------------------------------
+    # A tool result is read by two audiences. The model reads `content`; a
+    # program (the eval, a dashboard) needs facts like row_count and truncated.
+    # In phase 4 that was ToolReturn(metadata=...), which existed only inside
+    # one Python process. Across MCP the equivalent is the protocol's own
+    # `_meta` field: it travels on the wire, and the model never sees it.
+    #
+    # Returning CallToolResult instead of a bare str changes nothing the model
+    # reads - `content` is the same text as before.
+    return CallToolResult(
+        content=[TextContent(type="text", text=text)],
+        meta=meta,
+    )
 
 
 if __name__ == "__main__":

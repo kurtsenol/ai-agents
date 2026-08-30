@@ -7,6 +7,7 @@ import json
 from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search, Q
 
+import tools_core
 from model import build_model
 from pydantic_ai import Agent, RunContext, ApprovalRequired, DeferredToolRequests, ToolReturn
 
@@ -142,53 +143,14 @@ def run_sql(ctx: RunContext[Deps], query: str) -> ToolReturn[str]:
 
     """
 
-    query = query.strip().rstrip(";")
+    # Body delegated to tools_core (phase 4 debt #1). The docstring above is
+    # the tool's ACI - the model reads it - so it stays here, verbatim.
+    # Two audiences, one call: tools_core returns prose for the model and
+    # metadata for the program, and this adapter routes each to its reader.
+    text, meta = tools_core.sql_query(ctx.deps.db_path, query)
+    return ToolReturn(return_value=text, metadata=meta)
 
-    # Remove leading comments before validation
-    cleaned = _strip_leading_comments(query).lstrip()
 
-    if not re.match(r"^(SELECT|WITH)\b", cleaned, re.IGNORECASE):
-        return ToolReturn(
-            return_value="Error: Only SELECT and WITH queries are allowed.",
-            metadata={"error": True, "row_count": 0, "truncated": False},
-        )
-
-    conn = sqlite3.connect(f"file:{ctx.deps.db_path}?mode=ro", uri=True)
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute(query)
-
-        columns = [col[0] for col in cursor.description]
-        rows = cursor.fetchall()
-
-        output = "\n".join(
-            json.dumps(dict(zip(columns, row)), ensure_ascii=False)
-            for row in rows[:50]
-        )
-
-        if len(rows) > 50:
-            output += f"\n...and {len(rows) - 50} more rows."
-
-        # The model reads prose; the eval reads metadata. Same call, two
-        # audiences, neither one guessing from the other's format.
-        return ToolReturn(
-            return_value=output or "No rows returned.",
-            metadata={
-                "error": False,
-                "row_count": len(rows),
-                "truncated": len(rows) > 50,
-            },
-        )
-
-    except sqlite3.Error as e:
-        return ToolReturn(
-            return_value=f"SQLite error: {e}",
-            metadata={"error": True, "row_count": 0, "truncated": False},
-        )
-
-    finally:
-        conn.close()
 
 @agent.tool
 def search_reviews(
@@ -225,146 +187,17 @@ def search_reviews(
             max_rating: Optional maximum review rating, inclusive.
     """
 
-
-    INDEX_NAME = "reviews"
-
-    if query is not None:
-        must = [Q("match", text=query)]
-    else:
-        must = [Q("match_all")]
-
-    filters = []
-
-    if store_id is not None:
-        filters.append(
-            Q("term", store_id=store_id)
-        )
-
-    if min_rating is not None or max_rating is not None:
-        rating_range = {}
-
-        if min_rating is not None:
-            rating_range["gte"] = min_rating
-
-        if max_rating is not None:
-            rating_range["lte"] = max_rating
-
-        filters.append(
-            Q("range", rating=rating_range)
-        )
-
-    bool_query = Q(
-        "bool",
-        must=must,
-        filter=filters,
+    # Body delegated to tools_core (phase 4 debt #1).
+    text, meta = tools_core.review_search(
+        ctx.deps.es,
+        query=query,
+        store_id=store_id,
+        min_rating=min_rating,
+        max_rating=max_rating,
     )
-
-    search = (
-        Search(using=ctx.deps.es, index=INDEX_NAME)
-        .query(bool_query)
-        [:50]
-    )
-
-    response = search.execute()
-
-    # Elasticsearch may return either an integer or a dict-like
-    # object depending on the client configuration/version.
-    total = response.hits.total.value
-
-    reviews = [
-        {
-            "store_id": hit.store_id,
-            "rating": hit.rating,
-            "text": hit.text,
-            "ts": hit.ts,
-        }
-        for hit in response
-    ]
-
-    # If text search found nothing, count reviews using only the filters.
-    if total == 0:
-        filter_only_query = Q(
-            "bool",
-            filter=filters,
-        )
-
-        count_search = (
-            Search(using=ctx.deps.es, index=INDEX_NAME)
-            .query(filter_only_query)
-        )
-
-        count_response = count_search.execute()
-        filtered_total = count_response.hits.total.value
-
-        applied_filters = []
-
-        if store_id is not None:
-            applied_filters.append(f"store_id={store_id}")
-        if min_rating is not None:
-            applied_filters.append(f"min_rating={min_rating}")
-        if max_rating is not None:
-            applied_filters.append(f"max_rating={max_rating}")
-
-        filters_text = ", ".join(applied_filters) or "none"
-
-        if query is None:
-            return ToolReturn(
-                return_value=(
-                    f"No reviews matched the filters {filters_text}. "
-                    "There are no reviews in the index matching these filters."
-                ),
-                metadata={
-                    "hit_count": total,
-                    "filtered_total": filtered_total,
-                    "truncated": False,
-                    "query_used": False,
-                },
-            )
-
-        return ToolReturn(
-            return_value=(
-                f"No reviews matched query={query!r} with filters {filters_text}.\n"
-                f"{filtered_total} reviews exist for these filters — "
-                "try different or broader English search terms."
-            ),
-            metadata={
-                "hit_count": total,
-                "filtered_total": filtered_total,
-                "truncated": False,
-                "query_used": True,
-            },
-        )
+    return ToolReturn(return_value=text, metadata=meta)
 
 
-    output = "\n".join(
-        json.dumps(review, ensure_ascii=False)
-        for review in reviews
-    )
-
-    truncated = total > len(reviews)
-
-    if truncated:
-        if query is None:
-            output += (
-                f"\nWARNING: This is only a partial listing. "
-                f"{len(reviews)} of {total} reviews are shown; "
-                f"{total - len(reviews)} reviews are not shown. "
-                "Do not use this result to conclude that a topic is absent. "
-                "Narrow the filters until all matching reviews fit in the result set, "
-                "or report the question as unresolved."
-            )
-        else:
-            output += f"\n...and {total - len(reviews)} more rows."
-
-    return ToolReturn(
-        return_value=output,
-        metadata={
-            "hit_count": total,
-            "filtered_total": None,
-            "truncated": truncated,
-            "query_used": query is not None,
-        },
-    )
 
 @agent.tool
 def run_write_sql(
