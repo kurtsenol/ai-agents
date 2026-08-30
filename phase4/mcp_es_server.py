@@ -129,6 +129,9 @@ def search_reviews(
     #
     # Returning CallToolResult instead of a bare str changes nothing the model
     # reads - `content` is the same text as before.
+    # No is_error here: "no reviews matched" is an ANSWER, not a failure.
+    # Marking empty results as errors would teach the model to retry its way
+    # around a true negative - the exact behaviour g09 tests against.
     return CallToolResult(
         content=[TextContent(type="text", text=text)],
         meta=meta,

@@ -37,8 +37,53 @@ def _strip_leading_comments(sql: str) -> str:
     return re.sub(pattern, "", sql, flags=re.DOTALL | re.VERBOSE)
 
 
+# How much work one query may do before we stop it.
+#
+# SQLite has no wall-clock knob. It counts virtual-machine instructions and
+# calls a handler every N of them, so a time budget has to be converted into
+# an instruction budget - and the exchange rate depends on the machine. That
+# makes this a MEASURED number, not a chosen one.
+#
+# Measured on this database (2,040 transactions), interval = 1,000:
+#
+#   honest, WHERE store_id=42 (421 rows)            1 callback
+#   3-way join, filtered                            1
+#   aggregate over the whole table                 34
+#   ---------------------------------------------------
+#   cartesian join, COUNT(*)                    8,327   (0.04 s)
+#   cartesian join, ORDER BY                   29,135   (1.05 s)
+#   cartesian join, GROUP BY                   49,943   (0.61 s)
+#
+# The gap between the two groups is ~250x, which is what makes a threshold
+# possible at all. 20,000 sits inside that gap: ~600x headroom over the most
+# expensive honest query, while stopping the two shapes that actually hurt.
+#
+# Note what this does NOT catch, and why that is fine: a plain cartesian
+# SELECT with no ORDER BY or aggregate uses ZERO callbacks, because SQLite
+# is lazy and fetchmany(51) only ever asks for 51 rows. The two limits cover
+# different failure shapes - fetchmany bounds lazy queries, the instruction
+# budget bounds queries that must do all the work before returning row one.
+# Neither is redundant.
+PROGRESS_INTERVAL = 1_000
+MAX_PROGRESS_CALLS = 20_000
+
+
 def sql_query(db_path: Path, query: str) -> tuple[str, dict]:
-    """Read-only SELECT/WITH. Returns (text, metadata)."""
+    """Read-only SELECT/WITH, with a row cap and a work cap.
+
+    Three independent limits, and they are independent on purpose. Any one
+    of them can be wrong without the other two failing:
+
+      1. `mode=ro` on the connection      - SQLite itself refuses writes.
+      2. the SELECT/WITH regex            - advisory; catches obvious intent.
+      3. fetchmany + progress handler     - bounds the cost of an ALLOWED query.
+
+    Layer 3 is the one phase 4 did not have, and the one an allowlist can
+    never provide: `SELECT a.id, b.id FROM transactions a, transactions b`
+    passes every check above it, and on this database materialises 4,161,600
+    rows - 634 MB and 6.2 s - before the 50-row cap is applied. The cap was
+    applied after the damage. Now it is applied during.
+    """
     query = query.strip().rstrip(";")
     cleaned = _strip_leading_comments(query).lstrip()
 
@@ -50,29 +95,56 @@ def sql_query(db_path: Path, query: str) -> tuple[str, dict]:
 
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
 
+    calls = 0
+
+    def _budget() -> int:
+        # Returning non-zero aborts the statement -> sqlite3.OperationalError.
+        nonlocal calls
+        calls += 1
+        return 1 if calls > MAX_PROGRESS_CALLS else 0
+
+    conn.set_progress_handler(_budget, PROGRESS_INTERVAL)
+
     try:
         cursor = conn.execute(query)
         columns = [c[0] for c in cursor.description]
-        rows = cursor.fetchall()
+
+        # ROW_LIMIT + 1: one extra row is how you learn "there are more"
+        # without paying to count them all.
+        rows = cursor.fetchmany(ROW_LIMIT + 1)
+        has_more = len(rows) > ROW_LIMIT
+        rows = rows[:ROW_LIMIT]
 
         text = "\n".join(
-            json.dumps(dict(zip(columns, r)), ensure_ascii=False)
-            for r in rows[:ROW_LIMIT]
+            json.dumps(dict(zip(columns, r)), ensure_ascii=False) for r in rows
         )
 
-        if len(rows) > ROW_LIMIT:
-            text += f"\n...and {len(rows) - ROW_LIMIT} more rows."
+        if has_more:
+            # Deliberately no total. Reporting "and 4,161,550 more" would
+            # require scanning everything, which is the cost we just refused.
+            text += (
+                f"\n...more rows exist; this result is capped at {ROW_LIMIT}. "
+                "Narrow the query (add filters or an aggregate) rather than "
+                "drawing a conclusion from a partial list."
+            )
 
         return (
             text or "No rows returned.",
-            {
-                "error": False,
-                "row_count": len(rows),
-                "truncated": len(rows) > ROW_LIMIT,
-            },
+            {"error": False, "row_count": len(rows), "truncated": has_more},
         )
 
     except sqlite3.Error as e:
+        # An aborted budget surfaces here as OperationalError('interrupted').
+        # It returns an ERROR, not a partial result, and the distinction is
+        # the whole point: a partial result is indistinguishable from a
+        # complete one to a model reading prose, and it will answer from it.
+        # An error is the only shape it cannot mistake for an answer.
+        if "interrupted" in str(e).lower():
+            return (
+                "Error: query aborted - it would have to examine too much data. "
+                "Add a WHERE filter, an aggregate, or a LIMIT and try again.",
+                {"error": True, "row_count": 0, "truncated": False},
+            )
         return (f"SQLite error: {e}", {"error": True, "row_count": 0, "truncated": False})
 
     finally:

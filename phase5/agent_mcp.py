@@ -35,7 +35,7 @@ from opentelemetry import trace
 
 from fastmcp.client import Client
 from fastmcp.client.transports import StdioTransport
-from pydantic_ai import Agent
+from pydantic_ai import Agent, ModelRetry
 from pydantic_ai.mcp import MCPToolset
 
 from model import build_model  # noqa: E402
@@ -55,7 +55,11 @@ def _stdio_toolset(script: str, toolset_id: str) -> MCPToolset:
         command="uv",
         args=["--directory", str(PHASE4), "run", script],
     )
-    return MCPToolset(Client(transport), id=toolset_id)
+    # `max_retries=2`: a model that wrote bad SQL should get to fix it, but
+    # not forever. Read the cost off the traces - one retry is one more
+    # `chat` span, ~7k input tokens and several seconds. Two is a budget;
+    # the default is a hope.
+    return MCPToolset(Client(transport), id=toolset_id, max_retries=2)
 
 
 sql_toolset = _stdio_toolset("mcp_sql_server.py", "retail-sql")
@@ -83,7 +87,12 @@ def _record_meta(toolset: MCPToolset):
         # Deliberately bypassing `call_tool` (the pydantic-ai wrapper): it
         # returns processed content, and `_meta` is not in it. We want the
         # raw protocol object.
-        result = await toolset.client.call_tool(name, args)
+        #
+        # `raise_on_error=False` because taking over the call means taking
+        # over the error policy too. The default raises immediately, which
+        # would abort before we record anything - and an error is exactly
+        # the run you most want a span for.
+        result = await toolset.client.call_tool(name, args, raise_on_error=False)
 
         span = trace.get_current_span()
         span.set_attribute("phase5.mcp.server", toolset.id or "")
@@ -97,9 +106,17 @@ def _record_meta(toolset: MCPToolset):
             else:
                 span.set_attribute(f"phase5.tool.{key}", str(value))
 
-        return "".join(
+        text = "".join(
             block.text for block in result.content if hasattr(block, "text")
         )
+
+        if result.is_error:
+            # ModelRetry hands the error text back to the model for another
+            # turn, bounded by `max_retries` above. The alternative - raising
+            # - kills a run over a fixable typo in a WHERE clause.
+            raise ModelRetry(text)
+
+        return text
 
     return process
 

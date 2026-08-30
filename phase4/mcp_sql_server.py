@@ -79,9 +79,14 @@ def run_sql(query: str) -> CallToolResult:
     #
     # Returning CallToolResult instead of a bare str changes nothing the model
     # reads - `content` is the same text as before.
+    # phase 4 debt #5: an error came back as an ordinary result. The model
+    # read "Error: ..." as prose and could ignore it; every program saw a
+    # successful call. MCP has a flag for this, and it is not decoration -
+    # the CLIENT branches on it (see agent_mcp.py).
     return CallToolResult(
         content=[TextContent(type="text", text=text)],
         meta=meta,
+        is_error=meta["error"],
     )
 
 
