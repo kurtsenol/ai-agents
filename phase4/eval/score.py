@@ -39,6 +39,43 @@ class CheckResult:
 
 
 # ---------------------------------------------------------------------------
+# The review corpus
+# ---------------------------------------------------------------------------
+
+# Elasticsearch refuses `from + size` beyond `index.max_result_window`, which
+# defaults to exactly this number. It is not a number we chose; it is a wall
+# we are standing next to. The reviews index is currently well under it.
+ES_MAX_RESULT_WINDOW = 10_000
+
+
+def load_review_texts(es: Elasticsearch) -> set[str]:
+    """Every indexed review body, used to verify quotes are verbatim.
+
+    Shared by score.py and phase5's per-run report so the truncation rule
+    lives in exactly one place.
+    """
+    response = es.search(
+        index=REVIEW_INDEX,
+        query={"match_all": {}},
+        source=["text"],
+        size=ES_MAX_RESULT_WINDOW,
+    )
+
+    total_reviews = response["hits"]["total"]["value"]
+    hits = response["hits"]["hits"]
+
+    if len(hits) < total_reviews:
+        raise RuntimeError(
+            f"Cannot score review evidence: Elasticsearch returned only "
+            f"{len(hits)} of {total_reviews} reviews from {REVIEW_INDEX}. "
+            "The review corpus is truncated at ES_MAX_RESULT_WINDOW, so "
+            "missing quotes cannot be distinguished from fabricated quotes."
+        )
+
+    return {hit["_source"]["text"] for hit in hits if "text" in hit["_source"]}
+
+
+# ---------------------------------------------------------------------------
 # Reaching into a record
 # ---------------------------------------------------------------------------
 
@@ -409,30 +446,7 @@ def score_file(path: Path) -> dict[tuple[str, str], tuple[int, int]]:
 
     conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
     es = Elasticsearch(ES_URL)
-
-    # Fetch the review corpus once for all records.
-    response = es.search(
-        index=REVIEW_INDEX,
-        query={"match_all": {}},
-        source=["text"],
-        size=10000,
-    )
-
-    total_reviews = response["hits"]["total"]["value"]
-    hits = response["hits"]["hits"]
-
-    if len(hits) < total_reviews:
-        print(
-            f"WARNING: Elasticsearch returned only {len(hits)} of "
-            f"{total_reviews} reviews from {REVIEW_INDEX}; "
-            "verbatim review scoring may be incomplete."
-        )
-
-    indexed_review_texts = {
-        hit["_source"]["text"]
-        for hit in hits
-        if "text" in hit["_source"]
-    }
+    indexed_review_texts = load_review_texts(es)
 
     tally: dict[tuple[str, str], tuple[int, int]] = {}
 
