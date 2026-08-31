@@ -103,6 +103,16 @@ cost_counter = _meter.create_counter(
     description="Derived dollar cost",
 )
 
+# Detection is a security signal, not a quality one, but it belongs on the
+# same dashboard: "did anything try to instruct my agent today" is a question
+# with an answer, and the answer should be a line on a graph rather than a
+# thing someone remembers to grep for.
+injection_detected = _meter.create_counter(
+    "agent.injection.detected",
+    unit="{detection}",
+    description="Tool output matching a known injection shape",
+)
+
 tool_calls_counter = _meter.create_counter(
     "agent.tool.calls",
     unit="{call}",

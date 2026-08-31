@@ -38,6 +38,9 @@ from fastmcp.client.transports import StdioTransport
 from pydantic_ai import Agent, ModelRetry
 from pydantic_ai.mcp import MCPToolset
 
+import untrusted
+from agent_metrics import injection_detected
+
 from model import build_model  # noqa: E402
 from retail_agent import INSTRUCTIONS  # noqa: E402
 from step3_output import AnalysisResult  # noqa: E402
@@ -80,6 +83,11 @@ reviews_toolset = _stdio_toolset("mcp_es_server.py", "retail-reviews")
 # has - the eval, a Grafana panel, an alert.
 
 
+# Set by step9_defend.py to run the same agent with and without the fence.
+# A defence you have not measured against its own absence is a belief.
+DEFENSE = False
+
+
 def _record_meta(toolset: MCPToolset):
     """Call the tool, copy its `_meta` onto the current span, return the text."""
 
@@ -109,6 +117,41 @@ def _record_meta(toolset: MCPToolset):
         text = "".join(
             block.text for block in result.content if hasattr(block, "text")
         )
+
+        # The scanner runs whether or not the fence is on: detection and
+        # prevention are separate jobs, and you want the signal even from a
+        # run you did not defend.
+        found = untrusted.scan(text)
+        span.set_attribute("phase5.untrusted.suspicious", found.suspicious)
+        if found.hits:
+            span.set_attribute("phase5.untrusted.hits", ",".join(found.hits))
+
+        # Policy on a positive scan: CONTINUE - record loudly, change nothing.
+        #
+        # Not `refuse` (drop the tool result), because of who gets to decide.
+        # Refusing hands anyone who can write a review a switch that turns
+        # the agent off: seed "ignore previous instructions" into enough
+        # documents and every search comes back empty, forever. That is a
+        # denial-of-service with a one-line payload, and it is worse than the
+        # attack it prevents, because scoping already bounds that attack and
+        # nothing bounds this one.
+        #
+        # Not `redact` either. The poisoned review is a REAL complaint about
+        # store 42 - the attacker appended to genuine evidence rather than
+        # fabricating a document. Cutting the matched span out removes the
+        # instruction and some of the answer with it, and the eval would show
+        # that as the agent missing a finding, with nothing pointing here.
+        #
+        # What makes `continue` defensible is that it is not the only control.
+        # The fence below is one layer, step 7's scoping is another, and this
+        # scan is the third - a DETECTOR whose job is to make an attempt
+        # visible, not to stop it. So the signal has to actually go somewhere:
+        # a span attribute for the one run, a metric for the fleet.
+        for hit in found.hits:
+            injection_detected.add(1, {"kind": hit, "server": toolset.id or ""})
+
+        if DEFENSE:
+            text = untrusted.wrap(text, source=toolset.id or "", tool=name)
 
         if result.is_error:
             # ModelRetry hands the error text back to the model for another
@@ -141,9 +184,21 @@ TOOLSETS = [sql_toolset, reviews_toolset]
 
 
 
+# The step 6 / step 8 agent: no boundary rule in its instructions. Kept as
+# the undefended baseline so step 8 stays reproducible.
 agent = Agent(
     build_model(),
     instructions=INSTRUCTIONS,
+    output_type=AnalysisResult,
+    toolsets=TOOLSETS,
+)
+
+# The same agent, told about the fence. Note what is NOT different: the
+# tools, the scoping, the model. One paragraph of instructions and a pair of
+# markers - that is the entire difference being measured.
+defended_agent = Agent(
+    build_model(),
+    instructions=INSTRUCTIONS + untrusted.BOUNDARY_RULE,
     output_type=AnalysisResult,
     toolsets=TOOLSETS,
 )
