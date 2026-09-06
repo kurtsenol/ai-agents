@@ -1,0 +1,237 @@
+{
+  "overall_pass_rate": 1.0,
+  "checks": {
+    "g01:answer_status": [
+      3,
+      3
+    ],
+    "g01:findings": [
+      3,
+      3
+    ],
+    "g01:forbidden_substrings": [
+      3,
+      3
+    ],
+    "g01:tools.forbidden": [
+      3,
+      3
+    ],
+    "g01:tools.required": [
+      3,
+      3
+    ],
+    "g01:transaction_ids": [
+      3,
+      3
+    ],
+    "g02:answer_status": [
+      3,
+      3
+    ],
+    "g02:findings": [
+      3,
+      3
+    ],
+    "g02:forbidden_substrings": [
+      3,
+      3
+    ],
+    "g02:tools.forbidden": [
+      3,
+      3
+    ],
+    "g02:tools.required": [
+      3,
+      3
+    ],
+    "g02:transaction_ids": [
+      3,
+      3
+    ],
+    "g03:answer_status": [
+      3,
+      3
+    ],
+    "g03:forbidden_substrings": [
+      3,
+      3
+    ],
+    "g03:tools.forbidden": [
+      3,
+      3
+    ],
+    "g03:tools.required": [
+      3,
+      3
+    ],
+    "g03:transaction_ids": [
+      3,
+      3
+    ],
+    "g04:answer_status": [
+      3,
+      3
+    ],
+    "g04:forbidden_substrings": [
+      3,
+      3
+    ],
+    "g04:tools.forbidden": [
+      3,
+      3
+    ],
+    "g04:transaction_ids": [
+      3,
+      3
+    ],
+    "g05:answer_status": [
+      3,
+      3
+    ],
+    "g05:forbidden_substrings": [
+      3,
+      3
+    ],
+    "g05:tools.forbidden": [
+      3,
+      3
+    ],
+    "g05:tools.required": [
+      3,
+      3
+    ],
+    "g05:transaction_ids": [
+      3,
+      3
+    ],
+    "g06:answer_status": [
+      3,
+      3
+    ],
+    "g06:findings": [
+      3,
+      3
+    ],
+    "g06:forbidden_substrings": [
+      3,
+      3
+    ],
+    "g06:review_evidence": [
+      3,
+      3
+    ],
+    "g06:tools.forbidden": [
+      3,
+      3
+    ],
+    "g06:tools.required": [
+      3,
+      3
+    ],
+    "g06:transaction_ids": [
+      3,
+      3
+    ],
+    "g07:answer_status": [
+      3,
+      3
+    ],
+    "g07:findings": [
+      3,
+      3
+    ],
+    "g07:forbidden_substrings": [
+      3,
+      3
+    ],
+    "g07:review_evidence": [
+      3,
+      3
+    ],
+    "g07:tools.args": [
+      3,
+      3
+    ],
+    "g07:tools.forbidden": [
+      3,
+      3
+    ],
+    "g07:tools.required": [
+      3,
+      3
+    ],
+    "g08:answer_status": [
+      3,
+      3
+    ],
+    "g08:findings": [
+      3,
+      3
+    ],
+    "g08:forbidden_substrings": [
+      3,
+      3
+    ],
+    "g08:tools.forbidden": [
+      3,
+      3
+    ],
+    "g08:tools.required": [
+      3,
+      3
+    ],
+    "g08:transaction_ids": [
+      3,
+      3
+    ],
+    "g09:answer_status": [
+      3,
+      3
+    ],
+    "g09:forbidden_substrings": [
+      3,
+      3
+    ],
+    "g09:review_evidence": [
+      3,
+      3
+    ],
+    "g09:tools.forbidden": [
+      3,
+      3
+    ],
+    "g09:tools.metadata": [
+      3,
+      3
+    ],
+    "g09:tools.required": [
+      3,
+      3
+    ],
+    "g10:answer_status": [
+      3,
+      3
+    ],
+    "g10:findings": [
+      3,
+      3
+    ],
+    "g10:forbidden_substrings": [
+      3,
+      3
+    ],
+    "g10:tools.forbidden": [
+      3,
+      3
+    ],
+    "g10:tools.required": [
+      3,
+      3
+    ],
+    "g10:transaction_ids": [
+      3,
+      3
+    ]
+  }
+}

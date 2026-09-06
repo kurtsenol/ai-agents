@@ -1,0 +1,101 @@
+# Two jobs, because the two kinds of test have nothing in common.
+#
+#   checks  - pure functions and container limits. No API key, no model, no
+#             money, ~15 seconds. Runs on every push, and is allowed to be
+#             required, because it is deterministic.
+#
+#   eval    - the golden set through a real model. Costs money, gives a
+#             different answer every time, needs a secret. Runs on demand and
+#             nightly, and gates on a comparison rather than on perfection.
+#
+# Putting them in one job would mean either paying for a model on every typo
+# or never running the cheap tests. The split is the whole design.
+
+name: eval
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  checks:
+    name: deterministic checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # retail.db is not in the repository - it is generated, and the seed
+      # script is the source of truth. Rebuilding it here also proves the
+      # seeding path still works, which the eval README depends on.
+      - name: Seed the database
+        run: uv run --project phase2 phase2/seed_db.py
+
+      - name: Run tests
+        working-directory: phase5
+        run: uv run pytest -q
+
+  eval:
+    name: golden set
+    # Never on a plain push: this one spends money.
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    needs: checks
+
+    services:
+      elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.15.1
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: "false"
+          ES_JAVA_OPTS: -Xms512m -Xmx512m
+        ports:
+          - 9200:9200
+        options: >-
+          --health-cmd "curl -fsS http://localhost:9200/_cluster/health || exit 1"
+          --health-interval 10s --health-timeout 5s --health-retries 20
+
+    env:
+      LITELLM_API_KEY: ${{ secrets.LITELLM_API_KEY }}
+      LITELLM_BASE_URL: ${{ secrets.LITELLM_BASE_URL }}
+      # No collector in CI. The OTLP exporter fails to connect and the run
+      # continues - traces are a local debugging aid, not a dependency of the
+      # eval. If CI ever needs them, point this at a real endpoint.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://localhost:4318
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Seed the database
+        run: uv run --project phase2 phase2/seed_db.py
+
+      - name: Seed Elasticsearch
+        run: uv run --project phase2 phase2/seed_elastic.py
+
+      - name: Run the golden set
+        working-directory: phase5
+        run: uv run eval_traced.py --runs 3
+
+      # Uploaded whether or not the gate passes: the artifact is how you find
+      # out WHY it failed, so it must not be conditional on it passing.
+      - name: Upload runs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-runs
+          path: phase5/out/runs_traced.jsonl
+
+      - name: Gate on the baseline
+        working-directory: phase5
+        run: uv run ci_gate.py
