@@ -14,3 +14,9 @@ __pycache__/
 debug.log
 formatted_log.txt
 runs.jsonl
+
+# Internal — company data models, field names, real request examples.
+# This repo is public; these must never be pushed.
+segment-agent-plan.md
+*.internal.md
+internal/
